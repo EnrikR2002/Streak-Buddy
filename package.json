@@ -4,10 +4,16 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
+    "dev": "node inject-env-to-appjson.js && node run-expo-with-reset.js",
+    "prestart": "node inject-env-to-appjson.js",
+    "poststart": "node reset-appjson-secrets.js",
+    "prebuild": "node inject-env-to-appjson.js",
+    "postbuild": "node reset-appjson-secrets.js",
+    "start": "node run-expo-with-reset.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "reset-secrets": "node reset-appjson-secrets.js"
   },
   "dependencies": {
     "@react-native-picker/picker": "^2.11.0",
@@ -23,7 +29,8 @@
     "zustand": "^5.0.5",
     "expo-secure-store": "~14.2.3",
     "expo-image-picker": "~16.1.4",
-    "expo-image-manipulator": "~13.1.7"
+    "expo-image-manipulator": "~13.1.7",
+    "expo-constants": "~17.1.6"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"
