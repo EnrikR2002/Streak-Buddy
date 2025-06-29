@@ -16,8 +16,6 @@ export default function PairScreen({ navigation }) {
 
     // Create a pairing code
     async function handleCreateCode() {
-        console.log('Pressed create pairing code');
-        alert('Creating pairing code...');
         const myCode = generateCode();
         // Add to Firestore as pending
         const docRef = await addDoc(collection(db, 'pairings'), {
@@ -59,9 +57,9 @@ export default function PairScreen({ navigation }) {
     // If code created, show it and wait for buddy
     if (mode === 'created') {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 }}>
                 <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Share this code with your buddy:</Text>
-                <Text selectable style={{ fontSize: 28, letterSpacing: 4, margin: 18 }}>{generatedCode}</Text>
+                <Text selectable style={{ fontSize: 28, letterSpacing: 4, margin: 20 }}>{generatedCode}</Text>
                 <Text>Have your buddy enter this code to pair.</Text>
                 <Button title="Go to App" onPress={() => navigation.replace('Home')} />
             </View>
@@ -70,8 +68,8 @@ export default function PairScreen({ navigation }) {
 
     // Main pairing UI
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30 }}>Pair With Your Buddy</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, marginTop: -175 }}>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 40 }}>Pair With Your Buddy</Text>
             <Button title="Create Pairing Code" onPress={handleCreateCode} />
             <Text style={{ marginVertical: 20, fontWeight: 'bold' }}>OR</Text>
             <TextInput
