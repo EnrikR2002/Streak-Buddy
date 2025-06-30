@@ -3,6 +3,7 @@ import { View, Text, Button, TextInput, Alert } from 'react-native';
 import { db } from '../firebase';
 import { collection, addDoc, doc, setDoc, getDoc, updateDoc, getDocs, query, where } from 'firebase/firestore';
 import { useUserStore } from '../store/User';
+import { theme } from '../theme';
 
 function generateCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -57,7 +58,7 @@ export default function PairScreen({ navigation }) {
     // If code created, show it and wait for buddy
     if (mode === 'created') {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 }}>
+            <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
                 <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Share this code with your buddy:</Text>
                 <Text selectable style={{ fontSize: 28, letterSpacing: 4, margin: 20 }}>{generatedCode}</Text>
                 <Text>Have your buddy enter this code to pair.</Text>
@@ -68,7 +69,7 @@ export default function PairScreen({ navigation }) {
 
     // Main pairing UI
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, marginTop: -175 }}>
+        <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center', marginTop: -175 }}>
             <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 40 }}>Pair With Your Buddy</Text>
             <Button title="Create Pairing Code" onPress={handleCreateCode} />
             <Text style={{ marginVertical: 20, fontWeight: 'bold' }}>OR</Text>

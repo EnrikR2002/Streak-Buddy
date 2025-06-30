@@ -3,6 +3,8 @@ import { View, Text, FlatList, Image, TouchableOpacity, Button, Alert, ActivityI
 import { db } from '../firebase';
 import { useUserStore } from '../store/User';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { theme } from '../theme';
+import AppButton from '../components/AppButton';
 
 export default function HabitDetailsScreen({ route, navigation }) {
     const { habit } = route.params;
@@ -30,13 +32,13 @@ export default function HabitDetailsScreen({ route, navigation }) {
     const isWaitingForApproval = proofs[0] && proofs[0].status === 'pending' && proofs[0].submittedBy === userId;
 
     return (
-        <View style={{ flex: 1, padding: 20 }}>
+        <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24 }}>
             <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>{habit.name}</Text>
             <Text>Current Streak: {habit.streak ?? 0}</Text>
             <Text>Best Streak: {habit.bestStreak ?? 0}</Text>
             <Text>Buddy ID(s): {buddyIds.length ? buddyIds.join(', ') : 'None'}</Text>
             {isWaitingForApproval && (
-                <Button title="Nudge Buddy" onPress={() => Alert.alert('Nudge sent! (Push notification coming soon)')} />
+                <AppButton title="Nudge Buddy" onPress={() => Alert.alert('Nudge sent! (Push notification coming soon)')} style={{ width: 180, alignSelf: 'center' }} />
             )}
             <Text style={{ fontSize: 18, fontWeight: 'bold', marginVertical: 16 }}>Proof Submissions</Text>
             {loading ? <ActivityIndicator /> : null}
@@ -47,7 +49,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
                 keyExtractor={item => item.id}
                 renderItem={({ item }) => (
                     <TouchableOpacity onPress={() => { setSelectedImage(item.url); setModalVisible(true); }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, flexDirection: 'row', alignItems: 'center', ...theme.shadow }}>
                             <Image source={{ uri: item.url }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 12 }} />
                             <View style={{ flex: 1 }}>
                                 <Text>Date: {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleString() : '...'}</Text>

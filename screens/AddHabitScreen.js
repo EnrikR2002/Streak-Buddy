@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Button, Alert, TextInput } from 'react-native';
 import { useHabitStore } from '../store/Habits';
 import * as ImagePicker from 'expo-image-picker';
+import { theme } from '../theme';
 
 export default function AddHabitScreen({ route, navigation }) {
     const createHabitWithCode = useHabitStore(s => s.createHabitWithCode);
@@ -15,7 +16,7 @@ export default function AddHabitScreen({ route, navigation }) {
 
     if (mode === 'created') {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
                 <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Share this code with your buddy:</Text>
                 <Text selectable style={{ fontSize: 28, letterSpacing: 4, margin: 20 }}>{createdCode}</Text>
                 <Text>Have your buddy enter this code to join this habit.</Text>
@@ -26,7 +27,7 @@ export default function AddHabitScreen({ route, navigation }) {
 
     if (mode === 'join') {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
                 <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Join a Habit</Text>
                 <TextInput
                     placeholder="Enter habit code"
@@ -53,7 +54,7 @@ export default function AddHabitScreen({ route, navigation }) {
 
     if (mode === 'add') {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
                 <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Create New Habit</Text>
                 <TextInput
                     placeholder="Habit Name"
@@ -103,7 +104,7 @@ export default function AddHabitScreen({ route, navigation }) {
             }
         }
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
                 <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Submit Photo Proof</Text>
                 <Button
                     title={image ? "Photo Selected" : "Pick a Photo"}
@@ -128,7 +129,7 @@ export default function AddHabitScreen({ route, navigation }) {
 
     // Choose mode
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
             <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 30 }}>Add or Join a Habit</Text>
             <Button title="Create New Habit" onPress={() => setMode('add')} />
             <View style={{ height: 30 }} />
