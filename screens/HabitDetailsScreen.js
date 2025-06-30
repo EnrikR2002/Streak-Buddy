@@ -40,25 +40,41 @@ export default function HabitDetailsScreen({ route, navigation }) {
             {isWaitingForApproval && (
                 <AppButton title="Nudge Buddy" onPress={() => Alert.alert('Nudge sent! (Push notification coming soon)')} style={{ width: 180, alignSelf: 'center' }} />
             )}
-            <Text style={{ fontSize: 18, fontWeight: 'bold', marginVertical: 16 }}>Proof Submissions</Text>
+            <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginVertical: 10, alignSelf: 'center' }}>Proof Submissions</Text>
             {loading ? <ActivityIndicator /> : null}
             {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
             {!loading && proofs.length === 0 && <Text>No submissions yet.</Text>}
             <FlatList
+                key={2}
                 data={proofs}
                 keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <TouchableOpacity onPress={() => { setSelectedImage(item.url); setModalVisible(true); }}>
-                        <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, flexDirection: 'row', alignItems: 'center', ...theme.shadow }}>
-                            <Image source={{ uri: item.url }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 12 }} />
-                            <View style={{ flex: 1 }}>
-                                <Text>Date: {item.timestamp?.toDate ? item.timestamp.toDate().toLocaleString() : '...'}</Text>
-                                <Text>Uploader: {item.submittedBy === userId ? 'You' : item.submittedBy}</Text>
-                                <Text>Status: {item.status}</Text>
+                numColumns={2}
+                contentContainerStyle={{ gap: 10 }}
+                columnWrapperStyle={{ gap: 10 }}
+                renderItem={({ item }) => {
+                    const isMe = item.submittedBy === userId;
+                    return (
+                        <TouchableOpacity onPress={() => { setSelectedImage(item.url); setModalVisible(true); }}>
+                            <View style={{
+                                flex: 1,
+                                borderColor: isMe ? theme.mySubBorder : theme.buddySubBorder,
+                                borderWidth: 2,
+                                borderRadius: 12,
+                                marginVertical: 6,
+                                marginHorizontal: 2,
+                                alignSelf: isMe ? 'flex-start' : 'flex-end',
+                                backgroundColor: theme.card,
+                                padding: 6,
+                                alignItems: 'center',
+                            }}>
+                                <Image source={{ uri: item.url }} style={{ width: 120, height: 120, borderRadius: 12, marginBottom: 6 }} />
+                                <Text style={{ fontSize: 12, color: theme.text, textAlign: 'center' }}>{item.timestamp?.toDate ? item.timestamp.toDate().toLocaleString() : '...'}</Text>
+                                <Text style={{ fontSize: 12, color: theme.text, textAlign: 'center' }}>{isMe ? 'You' : item.submittedBy}</Text>
+                                <Text style={{ fontSize: 12, color: theme.text, textAlign: 'center' }}>{item.status}</Text>
                             </View>
-                        </View>
-                    </TouchableOpacity>
-                )}
+                        </TouchableOpacity>
+                    );
+                }}
             />
             <Modal visible={modalVisible} transparent={true} onRequestClose={() => setModalVisible(false)}>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
