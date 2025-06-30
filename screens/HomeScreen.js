@@ -36,7 +36,10 @@ export default function HomeScreen({ navigation }) {
                 ListEmptyComponent={<Text>No habits yet. Add one!</Text>}
                 renderItem={({ item }) => {
                     const habitProofs = proofs[item.id] || [];
-                    const latestProof = habitProofs[0];
+                    // Only consider proofs from today
+                    const today = new Date().toDateString();
+                    const todaysProof = habitProofs.find(p => p.timestamp && p.timestamp.toDate && p.timestamp.toDate().toDateString() === today);
+                    const latestProof = todaysProof || null;
                     return (
                         <TouchableOpacity onPress={() => navigation.navigate('HabitDetails', { habit: item })}>
                             <View style={{ borderWidth: 1, borderColor: '#aaa', padding: 12, marginBottom: 12, borderRadius: 8 }}>

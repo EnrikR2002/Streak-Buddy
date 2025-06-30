@@ -18,14 +18,39 @@ export const useHabitStore = create((set, get) => ({
   loadHabits: async () => {
     const userId = useUserStore.getState().userId;
     if (!userId) return;
-    // Unsubscribe previous snapshot if exists
     if (get().unsubscribe) get().unsubscribe();
-    const q = query(collection(db, 'habits'), where('members', 'array-contains', userId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const habits = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      set({ habits });
+    // Query for both new and old habits
+    const q1 = query(collection(db, 'habits'), where('members', 'array-contains', userId));
+    const q2 = query(collection(db, 'habits'), where('userId', '==', userId));
+    // Listen to both queries synchronously
+    const unsub1 = onSnapshot(q1, (snapshot1) => {
+      const habits1 = snapshot1.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          bestStreak: typeof data.bestStreak === 'number' ? data.bestStreak : 0,
+          streak: typeof data.streak === 'number' ? data.streak : 0
+        };
+      });
+      const unsub2 = onSnapshot(q2, (snapshot2) => {
+        const habits2 = snapshot2.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            bestStreak: typeof data.bestStreak === 'number' ? data.bestStreak : 0,
+            streak: typeof data.streak === 'number' ? data.streak : 0
+          };
+        });
+        // Merge and deduplicate by id
+        const allHabits = [...habits1, ...habits2].filter((h, i, arr) => arr.findIndex(x => x.id === h.id) === i);
+        set({ habits: allHabits });
+        // Run daily reset after habits are loaded
+        checkAndResetStreaks(allHabits);
+      });
+      set({ unsubscribe: () => { unsub1(); unsub2(); } });
     });
-    set({ unsubscribe });
   },
 
   // Create a new habit with a code
@@ -36,6 +61,7 @@ export const useHabitStore = create((set, get) => ({
     await addDoc(collection(db, 'habits'), {
       name,
       streak: 0,
+      bestStreak: 0,
       submittedToday: false,
       approved: null,
       created: Date.now(),
@@ -68,6 +94,7 @@ export const useHabitStore = create((set, get) => ({
       userId,
       name,
       streak: 0,
+      bestStreak: 0,
       submittedToday: false,
       approved: null,
       created: Date.now()
@@ -102,13 +129,39 @@ export const useHabitStore = create((set, get) => ({
   // Approve proof (buddy action)
   approveProof: async (habitId, proofId) => {
     const proofDoc = doc(db, `habits/${habitId}/proofs`, proofId);
-    await updateDoc(proofDoc, { status: 'approved' });
+    // Get proof data
+    const proofSnap = await getDocs(query(collection(db, `habits/${habitId}/proofs`), where('submissionId', '==', proofId)));
+    let proofData = null;
+    proofSnap.forEach(doc => { proofData = doc.data(); });
+    if (!proofData) return;
+    // Only approve if not already approved
+    if (proofData.status !== 'approved') {
+      await updateDoc(proofDoc, { status: 'approved' });
+      // Get habit
+      const habitRef = doc(db, 'habits', habitId);
+      const habitSnap = await getDocs(query(collection(db, 'habits'), where('__name__', '==', habitId)));
+      let habit = null;
+      habitSnap.forEach(doc => { habit = { id: doc.id, ...doc.data() }; });
+      if (!habit) return;
+      // Check if proof is for today
+      let proofDate = proofData.timestamp && proofData.timestamp.toDate ? proofData.timestamp.toDate().toDateString() : null;
+      const today = new Date().toDateString();
+      if (proofDate === today) {
+        let newStreak = (habit.streak || 0) + 1;
+        let bestStreak = habit.bestStreak || 0;
+        if (newStreak > bestStreak) bestStreak = newStreak;
+        await updateDoc(habitRef, { streak: newStreak, bestStreak });
+      }
+    }
   },
 
   // Reject proof (buddy action)
   rejectProof: async (habitId, proofId) => {
     const proofDoc = doc(db, `habits/${habitId}/proofs`, proofId);
     await updateDoc(proofDoc, { status: 'rejected' });
+    // Reset streak to 0
+    const habitRef = doc(db, 'habits', habitId);
+    await updateDoc(habitRef, { streak: 0 });
   },
 }));
 
@@ -131,6 +184,20 @@ export async function checkAndResetDay() {
         approved: null,
         lastReset: today
       });
+    }
+  }
+}
+
+// Helper to check and reset streaks for loaded habits
+async function checkAndResetStreaks(habits) {
+  const today = new Date().toDateString();
+  for (const habit of habits) {
+    const proofsSnap = await getDocs(query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc')));
+    const proofs = proofsSnap.docs.map(d => d.data());
+    const latestApproved = proofs.find(p => p.status === 'approved');
+    let lastApprovedDate = latestApproved && latestApproved.timestamp && latestApproved.timestamp.toDate ? latestApproved.timestamp.toDate().toDateString() : null;
+    if (lastApprovedDate !== today && habit.streak > 0) {
+      await updateDoc(doc(db, 'habits', habit.id), { streak: 0 });
     }
   }
 }
