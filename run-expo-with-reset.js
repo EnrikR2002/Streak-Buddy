@@ -21,16 +21,21 @@ function resetSecretsAndExit(code) {
 
 expo.on('close', resetSecretsAndExit);
 
+let exiting = false;
+
+function handleSignal(signal) {
+    if (exiting) return;
+    exiting = true;
+    expo.kill(signal);
+}
+
 process.on('SIGINT', () => {
-    expo.kill('SIGINT');
-    // Wait for Expo to close, then reset
+    handleSignal('SIGINT');
 });
 
 process.on('SIGTERM', () => {
-    expo.kill('SIGTERM');
-    // Wait for Expo to close, then reset
+    handleSignal('SIGTERM');
 });
-
 process.on('uncaughtException', (err) => {
     console.error(err);
     resetSecretsAndExit(1);

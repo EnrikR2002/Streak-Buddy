@@ -13,9 +13,14 @@ const placeholderSecrets = {
     FIREBASE_MEASUREMENT_ID: 'YOUR_MEASUREMENT_ID'
 };
 
-const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf-8'));
-appJson.expo = appJson.expo || {};
-appJson.expo.extra = { ...placeholderSecrets };
+try {
+    const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf-8'));
+    appJson.expo = appJson.expo || {};
+    appJson.expo.extra = { ...placeholderSecrets };
 
-fs.writeFileSync(appJsonPath, JSON.stringify(appJson, null, 2));
-console.log('Reset app.json extra secrets to placeholders!');
+    fs.writeFileSync(appJsonPath, JSON.stringify(appJson, null, 2));
+    console.log('Reset app.json extra secrets to placeholders!');
+} catch (error) {
+    console.error('Failed to reset app.json secrets:', error.message);
+    process.exit(1);
+}

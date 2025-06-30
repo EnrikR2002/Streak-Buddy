@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db, storage } from '../firebase';
-import { collection, addDoc, query, where, onSnapshot, updateDoc, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, updateDoc, doc, getDocs, getDoc, serverTimestamp, setDoc, orderBy, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useUserStore } from './User';
@@ -19,12 +19,19 @@ export const useHabitStore = create((set, get) => ({
     const userId = useUserStore.getState().userId;
     if (!userId) return;
     if (get().unsubscribe) get().unsubscribe();
-    // Query for both new and old habits
     const q1 = query(collection(db, 'habits'), where('members', 'array-contains', userId));
     const q2 = query(collection(db, 'habits'), where('userId', '==', userId));
-    // Listen to both queries synchronously
+    let habits1 = [];
+    let habits2 = [];
+    // Helper to merge and update state
+    const updateCombinedHabits = () => {
+      const allHabits = [...habits1, ...habits2].filter((h, i, arr) => arr.findIndex(x => x.id === h.id) === i);
+      set({ habits: allHabits });
+      checkAndResetStreaks(allHabits);
+    };
+    // Set up both listeners independently
     const unsub1 = onSnapshot(q1, (snapshot1) => {
-      const habits1 = snapshot1.docs.map(doc => {
+      habits1 = snapshot1.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -33,24 +40,21 @@ export const useHabitStore = create((set, get) => ({
           streak: typeof data.streak === 'number' ? data.streak : 0
         };
       });
-      const unsub2 = onSnapshot(q2, (snapshot2) => {
-        const habits2 = snapshot2.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            bestStreak: typeof data.bestStreak === 'number' ? data.bestStreak : 0,
-            streak: typeof data.streak === 'number' ? data.streak : 0
-          };
-        });
-        // Merge and deduplicate by id
-        const allHabits = [...habits1, ...habits2].filter((h, i, arr) => arr.findIndex(x => x.id === h.id) === i);
-        set({ habits: allHabits });
-        // Run daily reset after habits are loaded
-        checkAndResetStreaks(allHabits);
-      });
-      set({ unsubscribe: () => { unsub1(); unsub2(); } });
+      updateCombinedHabits();
     });
+    const unsub2 = onSnapshot(q2, (snapshot2) => {
+      habits2 = snapshot2.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          bestStreak: typeof data.bestStreak === 'number' ? data.bestStreak : 0,
+          streak: typeof data.streak === 'number' ? data.streak : 0
+        };
+      });
+      updateCombinedHabits();
+    });
+    set({ unsubscribe: () => { unsub1(); unsub2(); } });
   },
 
   // Create a new habit with a code
@@ -128,20 +132,18 @@ export const useHabitStore = create((set, get) => ({
 
   // Approve proof (buddy action)
   approveProof: async (habitId, proofId) => {
-    const proofDoc = doc(db, `habits/${habitId}/proofs`, proofId);
+    const proofDocRef = doc(db, `habits/${habitId}/proofs`, proofId);
     // Get proof data
-    const proofSnap = await getDocs(query(collection(db, `habits/${habitId}/proofs`), where('submissionId', '==', proofId)));
-    let proofData = null;
-    proofSnap.forEach(doc => { proofData = doc.data(); });
+    const proofSnap = await getDoc(proofDocRef);
+    const proofData = proofSnap.exists() ? proofSnap.data() : null;
     if (!proofData) return;
     // Only approve if not already approved
     if (proofData.status !== 'approved') {
-      await updateDoc(proofDoc, { status: 'approved' });
+      await updateDoc(proofDocRef, { status: 'approved' });
       // Get habit
       const habitRef = doc(db, 'habits', habitId);
-      const habitSnap = await getDocs(query(collection(db, 'habits'), where('__name__', '==', habitId)));
-      let habit = null;
-      habitSnap.forEach(doc => { habit = { id: doc.id, ...doc.data() }; });
+      const habitSnap = await getDoc(habitRef);
+      const habit = habitSnap.exists() ? { id: habitSnap.id, ...habitSnap.data() } : null;
       if (!habit) return;
       // Check if proof is for today
       let proofDate = proofData.timestamp && proofData.timestamp.toDate ? proofData.timestamp.toDate().toDateString() : null;
@@ -191,13 +193,31 @@ export async function checkAndResetDay() {
 // Helper to check and reset streaks for loaded habits
 async function checkAndResetStreaks(habits) {
   const today = new Date().toDateString();
+  const batch = writeBatch(db);
+  let hasUpdates = false;
+
   for (const habit of habits) {
-    const proofsSnap = await getDocs(query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc')));
+    const proofsSnap = await getDocs(
+      query(
+        collection(db, `habits/${habit.id}/proofs`),
+        orderBy('timestamp', 'desc')
+      )
+    );
     const proofs = proofsSnap.docs.map(d => d.data());
     const latestApproved = proofs.find(p => p.status === 'approved');
-    let lastApprovedDate = latestApproved && latestApproved.timestamp && latestApproved.timestamp.toDate ? latestApproved.timestamp.toDate().toDateString() : null;
+    let lastApprovedDate = latestApproved &&
+      latestApproved.timestamp &&
+      latestApproved.timestamp.toDate
+      ? latestApproved.timestamp.toDate().toDateString()
+      : null;
+
     if (lastApprovedDate !== today && habit.streak > 0) {
-      await updateDoc(doc(db, 'habits', habit.id), { streak: 0 });
+      batch.update(doc(db, 'habits', habit.id), { streak: 0 });
+      hasUpdates = true;
     }
+  }
+
+  if (hasUpdates) {
+    await batch.commit();
   }
 }

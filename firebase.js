@@ -16,6 +16,23 @@ const {
     FIREBASE_MEASUREMENT_ID
 } = Constants.expoConfig?.extra || {};
 
+// Validate required environment variables
+const requiredVars = {
+    FIREBASE_API_KEY,
+    FIREBASE_AUTH_DOMAIN,
+    FIREBASE_PROJECT_ID,
+    FIREBASE_STORAGE_BUCKET,
+    FIREBASE_MESSAGING_SENDER_ID,
+    FIREBASE_APP_ID
+};
+
+const missingVars = Object.entries(requiredVars)
+    .filter(([_, value]) => !value)
+    .map(([key]) => key);
+
+if (missingVars.length > 0) {
+    throw new Error(`Missing required Firebase environment variables: ${missingVars.join(', ')}`);
+}
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {

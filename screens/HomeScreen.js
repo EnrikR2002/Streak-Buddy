@@ -38,9 +38,18 @@ export default function HomeScreen({ navigation }) {
                     const habitProofs = proofs[item.id] || [];
                     // Only consider proofs from today
                     const today = new Date().toDateString();
-                    const todaysProof = habitProofs.find(p => p.timestamp && p.timestamp.toDate && p.timestamp.toDate().toDateString() === today);
-                    const latestProof = todaysProof || null;
-                    return (
+                    const todaysProof = habitProofs.find(p => {
+                        if (!p.timestamp) return false;
+                        try {
+                            const proofDate = p.timestamp.toDate
+                                ? p.timestamp.toDate()
+                                : new Date(p.timestamp);
+                            return proofDate.toDateString() === today;
+                        } catch (e) {
+                            return false;
+                        }
+                    });
+                    const latestProof = todaysProof || null; return (
                         <TouchableOpacity onPress={() => navigation.navigate('HabitDetails', { habit: item })}>
                             <View style={{ borderWidth: 1, borderColor: '#aaa', padding: 12, marginBottom: 12, borderRadius: 8 }}>
                                 <Text style={{ fontSize: 18, fontWeight: '600' }}>{item.name}</Text>
