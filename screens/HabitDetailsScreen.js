@@ -5,6 +5,7 @@ import { useUserStore } from '../store/User';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { theme } from '../theme';
 import AppButton from '../components/AppButton';
+import * as Haptics from 'expo-haptics';
 
 export default function HabitDetailsScreen({ route, navigation }) {
     const { habit } = route.params;
@@ -14,6 +15,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
     const [error, setError] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
+    const [nudgeFlash, setNudgeFlash] = useState(false);
 
     useEffect(() => {
         setLoading(true);
@@ -38,7 +40,16 @@ export default function HabitDetailsScreen({ route, navigation }) {
             <Text>Best Streak: {habit.bestStreak ?? 0}</Text>
             <Text>Buddy ID(s): {buddyIds.length ? buddyIds.join(', ') : 'None'}</Text>
             {isWaitingForApproval && (
-                <AppButton title="Nudge Buddy" onPress={() => Alert.alert('Nudge sent! (Push notification coming soon)')} style={{ width: 180, alignSelf: 'center' }} />
+                <AppButton
+                    title="Nudge Buddy"
+                    onPress={async () => {
+                        Haptics.selectionAsync();
+                        setNudgeFlash(true);
+                        setTimeout(() => setNudgeFlash(false), 100);
+                        // TODO: Add notification sending logic here
+                    }}
+                    style={{ width: 180, alignSelf: 'center', backgroundColor: nudgeFlash ? theme.accent : theme.primary }}
+                />
             )}
             <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginVertical: 10, alignSelf: 'center' }}>Proof Submissions</Text>
             {loading ? <ActivityIndicator /> : null}
