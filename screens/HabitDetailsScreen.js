@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, Button, Alert, ActivityIndicator, Modal } from 'react-native';
 import { db } from '../firebase';
 import { useUserStore } from '../store/User';
@@ -16,6 +16,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
     const [nudgeFlash, setNudgeFlash] = useState(false);
+    const nudgeTimeoutRef = useRef();
 
     useEffect(() => {
         setLoading(true);
@@ -30,6 +31,14 @@ export default function HabitDetailsScreen({ route, navigation }) {
         return unsubscribe;
     }, [habit.id]);
 
+    useEffect(() => {
+        return () => {
+            if (nudgeTimeoutRef.current) {
+                clearTimeout(nudgeTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const buddyIds = (habit.members || []).filter(id => id !== habit.ownerId);
     const isWaitingForApproval = proofs[0] && proofs[0].status === 'pending' && proofs[0].submittedBy === userId;
 
@@ -43,9 +52,16 @@ export default function HabitDetailsScreen({ route, navigation }) {
                 <AppButton
                     title="Nudge Buddy"
                     onPress={async () => {
-                        Haptics.selectionAsync();
+                        try {
+                            await Haptics.selectionAsync();
+                        } catch (e) {
+                            // Optionally log or handle haptics error
+                        }
                         setNudgeFlash(true);
-                        setTimeout(() => setNudgeFlash(false), 100);
+                        if (nudgeTimeoutRef.current) {
+                            clearTimeout(nudgeTimeoutRef.current);
+                        }
+                        nudgeTimeoutRef.current = setTimeout(() => setNudgeFlash(false), 100);
                         // TODO: Add notification sending logic here
                     }}
                     style={{ width: 180, alignSelf: 'center', backgroundColor: nudgeFlash ? theme.accent : theme.primary }}
