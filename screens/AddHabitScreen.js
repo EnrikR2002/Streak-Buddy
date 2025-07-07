@@ -130,7 +130,7 @@ export default function AddHabitScreen({ route, navigation }) {
     // Choose mode
     return (
         <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 30 }}>Add or Join a Habit</Text>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30 }}>Add or Join a Habit</Text>
             <Button title="Create New Habit" onPress={() => setMode('add')} />
             <View style={{ height: 30 }} />
             <Button title="Join with Code" onPress={() => setMode('join')} />

@@ -6,6 +6,7 @@ import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { theme } from '../theme';
 import AppButton from '../components/AppButton';
 import * as Haptics from 'expo-haptics';
+import { getPushTokenForUser, sendPushNotification } from '../utils/push';
 
 export default function HabitDetailsScreen({ route, navigation }) {
     const { habit } = route.params;
@@ -62,7 +63,22 @@ export default function HabitDetailsScreen({ route, navigation }) {
                             clearTimeout(nudgeTimeoutRef.current);
                         }
                         nudgeTimeoutRef.current = setTimeout(() => setNudgeFlash(false), 100);
-                        // TODO: Add notification sending logic here
+                        // Send push notification to buddy
+                        try {
+                            // Find buddy userId (first in buddyIds)
+                            const buddyId = buddyIds[0];
+                            if (!buddyId) throw new Error('No buddy found');
+                            const buddyPushToken = await getPushTokenForUser(buddyId);
+                            if (!buddyPushToken) throw new Error('Buddy has no push token');
+                            await sendPushNotification({
+                                to: buddyPushToken,
+                                title: 'Streak Buddy',
+                                body: `You have been nudged for ${habit.name}!`,
+                                data: { habitId: habit.id },
+                            });
+                        } catch (err) {
+                            Alert.alert('Nudge failed', err.message || 'Could not send notification');
+                        }
                     }}
                     style={{ width: 180, alignSelf: 'center', backgroundColor: nudgeFlash ? theme.accent : theme.primary }}
                 />
