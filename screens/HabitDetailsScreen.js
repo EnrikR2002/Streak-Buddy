@@ -63,9 +63,8 @@ export default function HabitDetailsScreen({ route, navigation }) {
                             clearTimeout(nudgeTimeoutRef.current);
                         }
                         nudgeTimeoutRef.current = setTimeout(() => setNudgeFlash(false), 100);
-                        // Send push notification to buddy
+                        // Send push notification to buddy with debug alerts
                         try {
-                            // Find buddy userId (first in buddyIds)
                             const buddyId = buddyIds[0];
                             if (!buddyId) throw new Error('No buddy found');
                             const buddyPushToken = await getPushTokenForUser(buddyId);
@@ -73,7 +72,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
                             await sendPushNotification({
                                 to: buddyPushToken,
                                 title: 'Streak Buddy',
-                                body: `You have been nudged for ${habit.name}!`,
+                                body: `DO YOUR STREAK FOR: ${habit.name}!`,
                                 data: { habitId: habit.id },
                             });
                         } catch (err) {
