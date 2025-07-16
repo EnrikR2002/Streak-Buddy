@@ -5,26 +5,35 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from './screens/HomeScreen';
 import AddHabitScreen from './screens/AddHabitScreen';
 import HabitDetailsScreen from './screens/HabitDetailsScreen';
-import { useEnsureUserIdOnMount } from './store/User';
-import { useUserStore } from './store/User';
+import ProfileScreen from './screens/ProfileScreen';
+import LoginScreen from './screens/LoginScreen';
+import { useFirebaseAuthUser } from './store/Auth';
+import { useSyncUserIdWithAuth } from './store/User';
 import { registerForPushNotificationsAsync } from './utils/push';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  useEnsureUserIdOnMount();
-  const userId = useUserStore(s => s.userId);
+  useSyncUserIdWithAuth();
+  const user = useFirebaseAuthUser();
   useEffect(() => {
-    if (userId) {
-      registerForPushNotificationsAsync(userId);
+    if (user?.uid) {
+      registerForPushNotificationsAsync(user.uid);
     }
-  }, [userId]);
+  }, [user?.uid]);
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Home">
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="AddHabit" component={AddHabitScreen} />
-        <Stack.Screen name="HabitDetails" component={HabitDetailsScreen} options={{ title: 'Habit Details' }} />
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {user ? (
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="AddHabit" component={AddHabitScreen} />
+            <Stack.Screen name="HabitDetails" component={HabitDetailsScreen} options={{ title: 'Habit Details' }} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+          </>
+        ) : (
+          <Stack.Screen name="Login" component={LoginScreen} />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

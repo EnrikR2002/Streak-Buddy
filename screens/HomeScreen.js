@@ -30,7 +30,10 @@ export default function HomeScreen({ navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.background, paddingHorizontal: 18, paddingTop: 24 }}>
-            <AppButton title="Add Habit" onPress={() => navigation.navigate('AddHabit')} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <AppButton title="Add Habit" onPress={() => navigation.navigate('AddHabit')} style={{ flex: 1, marginRight: 8 }} />
+                <AppButton title="Profile" onPress={() => navigation.navigate('Profile')} style={{ flex: 1 }} />
+            </View>
             <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginVertical: 10, alignSelf: 'center' }}>Your Habits</Text>
             <FlatList
                 data={habits}
