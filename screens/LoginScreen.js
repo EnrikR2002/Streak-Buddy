@@ -51,6 +51,7 @@ export default function LoginScreen() {
                 email: user.email,
                 username: uname,
                 createdAt: new Date().toISOString(),
+                profilePic: 'default', // Use 'default' as a marker for the defaultBuddy.png asset
             });
         }
         // TODO: Navigate to HomeScreen after login
