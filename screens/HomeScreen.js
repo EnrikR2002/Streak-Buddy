@@ -123,7 +123,11 @@ export default function HomeScreen({ navigation }) {
                                             )}
                                         </>
                                     ) : (
-                                        <AppButton title="Submit Proof" onPress={() => navigation.navigate('AddHabit', { id: item.id })} />
+                                        item.members && item.members.length === 1 ? (
+                                            <AppButton title="Invite Buddy" onPress={() => navigation.navigate('HabitDetails', { habit: item, showInvite: true })} />
+                                        ) : (
+                                            <AppButton title="Submit Proof" onPress={() => navigation.navigate('AddHabit', { id: item.id })} />
+                                        )
                                     )}
                                 </View>
                             </TouchableOpacity>

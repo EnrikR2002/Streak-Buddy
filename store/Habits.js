@@ -5,10 +5,6 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useUserStore } from './User';
 
-// Generate a random 6-character code
-function generateCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
 
 export const useHabitStore = create((set, get) => ({
   habits: [],
@@ -57,11 +53,10 @@ export const useHabitStore = create((set, get) => ({
     set({ unsubscribe: () => { unsub1(); unsub2(); } });
   },
 
-  // Create a new habit with a code
-  createHabitWithCode: async ({ name }) => {
+  // Add new habit
+  addHabit: async ({ name }) => {
     const userId = useUserStore.getState().userId;
     if (!userId) throw new Error('User ID not set');
-    const code = generateCode();
     await addDoc(collection(db, 'habits'), {
       name,
       streak: 0,
@@ -69,39 +64,8 @@ export const useHabitStore = create((set, get) => ({
       submittedToday: false,
       approved: null,
       created: Date.now(),
-      code,
       members: [userId],
       ownerId: userId
-    });
-    return code;
-  },
-
-  // Join an existing habit by code
-  joinHabitByCode: async (code) => {
-    const userId = useUserStore.getState().userId;
-    if (!userId) throw new Error('User ID not set');
-    const q = query(collection(db, 'habits'), where('code', '==', code.toUpperCase()));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) throw new Error('No habit found with that code');
-    const docRef = snapshot.docs[0].ref;
-    const habit = snapshot.docs[0].data();
-    if (habit.members && habit.members.includes(userId)) throw new Error('Already joined');
-    await updateDoc(docRef, {
-      members: habit.members ? [...habit.members, userId] : [userId]
-    });
-  },
-
-  // Add new habit
-  addHabit: async ({ name }) => {
-    const userId = useUserStore.getState().userId;
-    await addDoc(collection(db, 'habits'), {
-      userId,
-      name,
-      streak: 0,
-      bestStreak: 0,
-      submittedToday: false,
-      approved: null,
-      created: Date.now()
     });
   },
 
@@ -192,7 +156,11 @@ export async function checkAndResetDay() {
 
 // Helper to check and reset streaks for loaded habits
 async function checkAndResetStreaks(habits) {
-  const today = new Date().toDateString();
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const todayStr = today.toDateString();
+  const yesterdayStr = yesterday.toDateString();
   const batch = writeBatch(db);
   let hasUpdates = false;
 
@@ -211,7 +179,12 @@ async function checkAndResetStreaks(habits) {
       ? latestApproved.timestamp.toDate().toDateString()
       : null;
 
-    if (lastApprovedDate !== today && habit.streak > 0) {
+    // Only reset if last approved is not today or yesterday (i.e., missed a full day)
+    if (
+      lastApprovedDate !== todayStr &&
+      lastApprovedDate !== yesterdayStr &&
+      habit.streak > 0
+    ) {
       batch.update(doc(db, 'habits', habit.id), { streak: 0 });
       hasUpdates = true;
     }

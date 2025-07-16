@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Button, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Button, Alert, ActivityIndicator, Modal, TextInput } from 'react-native';
 import FastImage from '@d11/react-native-fast-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../firebase';
 import { useUserStore } from '../store/User';
-import { collection, query, orderBy, limit, startAfter, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, startAfter, getDocs, where, updateDoc, doc } from 'firebase/firestore';
 import { theme } from '../theme';
 import AppButton from '../components/AppButton';
 import CustomHeader from '../components/CustomHeader';
@@ -24,6 +24,42 @@ export default function HabitDetailsScreen({ route, navigation }) {
     const [selectedImage, setSelectedImage] = useState(null);
     const [nudgeFlash, setNudgeFlash] = useState(false);
     const nudgeTimeoutRef = useRef();
+    const [inviteModal, setInviteModal] = useState(false);
+    const [search, setSearch] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+    const [inviteError, setInviteError] = useState('');
+    // Invite/search logic
+    async function handleSearch() {
+        setSearching(true);
+        setInviteError('');
+        setSearchResults([]);
+        try {
+            if (!search.trim()) throw new Error('Enter a username');
+            const q = query(collection(db, 'users'), where('username', '>=', search.trim()), where('username', '<=', search.trim() + '\uf8ff'));
+            const snap = await getDocs(q);
+            const results = snap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(u => u.id !== userId && !(habit.members || []).includes(u.id));
+            setSearchResults(results);
+            if (results.length === 0) setInviteError('No users found');
+        } catch (e) {
+            setInviteError(e.message || 'Search failed');
+        }
+        setSearching(false);
+    }
+
+    async function handleInvite(uid) {
+        if ((habit.members || []).length >= 2) return;
+        try {
+            const habitRef = doc(db, 'habits', habit.id);
+            await updateDoc(habitRef, { members: [...(habit.members || []), uid] });
+            setInviteModal(false);
+            Alert.alert('Success', 'Buddy invited!');
+        } catch (e) {
+            Alert.alert('Error', e.message || 'Could not invite');
+        }
+    }
 
     useEffect(() => {
         let unsub = null;
@@ -86,6 +122,39 @@ export default function HabitDetailsScreen({ route, navigation }) {
                 <Text>Current Streak: {habit.streak ?? 0}</Text>
                 <Text>Best Streak: {habit.bestStreak ?? 0}</Text>
                 <Text>Buddy ID(s): {buddyIds.length ? buddyIds.join(', ') : 'None'}</Text>
+                {/* Invite Buddy Button if only 1 member */}
+                {(habit.members || []).length === 1 && (
+                    <AppButton title="Invite Buddy" onPress={() => setInviteModal(true)} style={{ marginVertical: 12 }} />
+                )}
+                {/* Invite Modal */}
+                <Modal visible={inviteModal} animationType="slide" transparent={true} onRequestClose={() => setInviteModal(false)}>
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '85%' }}>
+                            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Invite Buddy</Text>
+                            <TextInput
+                                placeholder="Search username..."
+                                value={search}
+                                onChangeText={setSearch}
+                                style={{ borderWidth: 1, borderColor: '#aaa', borderRadius: 8, padding: 8, marginBottom: 12 }}
+                                autoCapitalize="none"
+                            />
+                            <Button title={searching ? 'Searching...' : 'Search'} onPress={handleSearch} disabled={searching} />
+                            {inviteError ? <Text style={{ color: 'red', marginTop: 8 }}>{inviteError}</Text> : null}
+                            <FlatList
+                                data={searchResults}
+                                keyExtractor={item => item.id}
+                                renderItem={({ item }) => (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
+                                        <Text style={{ flex: 1, fontSize: 16 }}>{item.username || item.email}</Text>
+                                        <Button title="Invite" onPress={() => handleInvite(item.id)} />
+                                    </View>
+                                )}
+                                ListEmptyComponent={searchResults.length === 0 && !searching ? null : undefined}
+                            />
+                            <Button title="Close" onPress={() => setInviteModal(false)} color="#888" />
+                        </View>
+                    </View>
+                </Modal>
                 {isWaitingForApproval && (
                     <AppButton
                         title="Nudge Buddy"
