@@ -4,7 +4,8 @@ import FastImage from '@d11/react-native-fast-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../firebase';
 import { useUserStore } from '../store/User';
-import { collection, query, orderBy, limit, startAfter, getDocs, where, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, startAfter, getDocs, where } from 'firebase/firestore';
+import { useHabitStore } from '../store/Habits';
 import { theme } from '../theme';
 import AppButton from '../components/AppButton';
 import CustomHeader from '../components/CustomHeader';
@@ -38,9 +39,11 @@ export default function HabitDetailsScreen({ route, navigation }) {
             if (!search.trim()) throw new Error('Enter a username');
             const q = query(collection(db, 'users'), where('username', '>=', search.trim()), where('username', '<=', search.trim() + '\uf8ff'));
             const snap = await getDocs(q);
+            // Only show users not already in memberIds
+            const memberIds = (habit.memberIds || (habit.members || []).map(m => m.id) || []);
             const results = snap.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(u => u.id !== userId && !(habit.members || []).includes(u.id));
+                .filter(u => u.id !== userId && !memberIds.includes(u.id));
             setSearchResults(results);
             if (results.length === 0) setInviteError('No users found');
         } catch (e) {
@@ -50,10 +53,10 @@ export default function HabitDetailsScreen({ route, navigation }) {
     }
 
     async function handleInvite(uid) {
-        if ((habit.members || []).length >= 2) return;
+        // Only allow max 2 members
+        if ((habit.memberIds || (habit.members || []).map(m => m.id) || []).length >= 2) return;
         try {
-            const habitRef = doc(db, 'habits', habit.id);
-            await updateDoc(habitRef, { members: [...(habit.members || []), uid] });
+            await useHabitStore.getState().inviteBuddy(habit.id, uid);
             setInviteModal(false);
             Alert.alert('Success', 'Buddy invited!');
         } catch (e) {
@@ -112,18 +115,23 @@ export default function HabitDetailsScreen({ route, navigation }) {
         };
     }, []);
 
-    const buddyIds = (habit.members || []).filter(id => id !== habit.ownerId);
+    // Get buddy IDs from member objects, excluding owner and current user
+    const buddyIds = (habit.members || []).filter(m => m.id !== habit.ownerId && m.id !== userId).map(m => m.id);
+    // Find current user's member object
+    const myMember = (habit.members || []).find(m => m.id === userId);
+    const myStreak = myMember?.streak ?? 0;
+    const myBestStreak = myMember?.bestStreak ?? 0;
     const isWaitingForApproval = proofs[0] && proofs[0].status === 'pending' && proofs[0].submittedBy === userId;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
             <CustomHeader title={habit.name} onBack={() => navigation.goBack()} />
             <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 12 }}>
-                <Text>Current Streak: {habit.streak ?? 0}</Text>
-                <Text>Best Streak: {habit.bestStreak ?? 0}</Text>
+                <Text>Current Streak: {myStreak}</Text>
+                <Text>Best Streak: {myBestStreak}</Text>
                 <Text>Buddy ID(s): {buddyIds.length ? buddyIds.join(', ') : 'None'}</Text>
                 {/* Invite Buddy Button if only 1 member */}
-                {(habit.members || []).length === 1 && (
+                {(habit.memberIds ? habit.memberIds.length : (habit.members || []).length) === 1 && (
                     <AppButton title="Invite Buddy" onPress={() => setInviteModal(true)} style={{ marginVertical: 12 }} />
                 )}
                 {/* Invite Modal */}

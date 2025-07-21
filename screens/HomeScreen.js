@@ -3,23 +3,23 @@ import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react
 import FastImage from '@d11/react-native-fast-image';
 import { Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useHabitStore } from '../store/Habits';
 import { useUserStore } from '../store/User';
-import { doc, getDoc } from 'firebase/firestore';
+import { useHabitStore } from '../store/Habits';
+import { doc, getDoc, collection, query, where, onSnapshot, collectionGroup, orderBy } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { theme } from '../theme';
 import AppButton from '../components/AppButton';
 import CustomHeader from '../components/CustomHeader';
-
 import { useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen({ navigation }) {
-    const habits = useHabitStore(s => s.habits);
     const userId = useUserStore(s => s.userId);
+    const [habits, setHabits] = useState([]);
+    const [invites, setInvites] = useState([]);
     const [proofs, setProofs] = useState({}); // { habitId: [proofs] }
-    const [loadingProofs, setLoadingProofs] = useState(false);
     const [profilePic, setProfilePic] = useState(null);
+    const [combinedList, setCombinedList] = useState([]);
 
     // Always fetch latest profilePic when HomeScreen is focused or userId changes
     useFocusEffect(
@@ -41,19 +41,66 @@ export default function HomeScreen({ navigation }) {
     );
 
     useEffect(() => {
-        if (!userId) return;
-        useHabitStore.getState().loadHabits();
-        // Listen for proofs for all habits
-        setLoadingProofs(true);
-        const unsubscribes = habits.map(habit => {
-            const q = query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc'));
-            return onSnapshot(q, snap => {
-                setProofs(prev => ({ ...prev, [habit.id]: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
-            });
+        // Fetch habits where I'm a member
+        const q1 = query(
+            collection(db, 'habits'),
+            where('memberIds', 'array-contains', userId)
+        );
+        const unsub1 = onSnapshot(q1, snap => {
+            setHabits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
-        setLoadingProofs(false);
-        return () => { unsubscribes.forEach(u => u && u()); };
-    }, [userId, habits.length]);
+
+        // Fetch invites where I'm the invitee (pending only)
+        const q2 = query(
+            collectionGroup(db, 'invites'),
+            where('invitee', '==', userId),
+            where('status', '==', 'pending')
+        );
+        const unsub2 = onSnapshot(q2, snap => {
+            setInvites(
+                snap.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        habitId: doc.ref.parent.parent.id,
+                        habitName: data.habitName || '',
+                        invitedBy: data.invitedBy || '',
+                        ...data
+                    };
+                })
+            );
+        });
+
+        // Listen for proofs for all habits
+        const unsubProofs = [];
+        habits.forEach(habit => {
+            const q = query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc'));
+            unsubProofs.push(onSnapshot(q, snap => {
+                setProofs(prev => ({ ...prev, [habit.id]: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+            }));
+        });
+
+        return () => {
+            unsub1();
+            unsub2();
+            unsubProofs.forEach(u => u && u());
+        };
+    }, [userId]);
+
+    // Combine habits and invites into a single list
+    useEffect(() => {
+        // Habits you are a member of
+        const habitItems = habits.map(h => ({ type: 'habit', ...h }));
+        // Pending invites
+        const inviteItems = invites.map(inv => ({
+            type: 'invite',
+            id: inv.id,
+            habitId: inv.habitId,
+            habitName: inv.habitName,
+            invitedBy: inv.invitedBy
+        }));
+        setCombinedList([...inviteItems, ...habitItems]);
+    }, [habits, invites]);
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
@@ -72,66 +119,98 @@ export default function HomeScreen({ navigation }) {
             } />
             <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 12 }}>
                 <AppButton title="Add Habit" onPress={() => navigation.navigate('AddHabit')} style={{ marginBottom: 10 }} />
-                <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginVertical: 10, alignSelf: 'center' }}>Your Habits</Text>
+                <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.text, marginVertical: 10, alignSelf: 'center' }}>Your Habits & Invites</Text>
                 <FlatList
-                    data={habits}
-                    keyExtractor={item => item.id}
-                    ListEmptyComponent={<Text>No habits yet. Add one!</Text>}
+                    data={combinedList}
+                    keyExtractor={item => item.type === 'invite' ? `invite-${item.id}` : item.id}
+                    ListEmptyComponent={<Text>No habits or invites yet. Add one!</Text>}
                     renderItem={({ item }) => {
-                        const habitProofs = proofs[item.id] || [];
-                        // Only consider proofs from today
-                        const today = new Date().toDateString();
-                        const todaysProof = habitProofs.find(p => {
-                            if (!p.timestamp) return false;
-                            try {
-                                const proofDate = p.timestamp.toDate
-                                    ? p.timestamp.toDate()
-                                    : new Date(p.timestamp);
-                                return proofDate.toDateString() === today;
-                            } catch (e) {
-                                return false;
-                            }
-                        });
-                        const latestProof = todaysProof || null;
-                        return (
-                            <TouchableOpacity onPress={() => navigation.navigate('HabitDetails', { habit: item })}>
-                                <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, ...theme.shadow, alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 18, fontWeight: '600', textAlign: 'center' }}>{item.name}</Text>
-                                    {latestProof ? (
-                                        <>
-                                            <Text style={{ textAlign: 'center' }}>Status: {latestProof.status}</Text>
-                                            <Image source={{ uri: latestProof.url }} style={{ width: 120, height: 120, marginVertical: 8, borderRadius: 8, alignSelf: 'center' }} />
-                                            <Text style={{ textAlign: 'center' }}>Submitted by: {latestProof.submittedBy === userId ? 'You' : 'Buddy'}</Text>
-                                            {latestProof.status === 'pending' && userId !== latestProof.submittedBy && (
-                                                <View style={{ flexDirection: 'row', marginTop: 8, justifyContent: 'center', width: '100%' }}>
-                                                    <AppButton title="Approve" onPress={async () => {
-                                                        await useHabitStore.getState().approveProof(item.id, latestProof.id);
-                                                    }} style={{ flex: 1, marginRight: 6 }} />
-                                                    <AppButton title="Reject" onPress={async () => {
-                                                        await useHabitStore.getState().rejectProof(item.id, latestProof.id);
-                                                    }} style={{ flex: 1, marginLeft: 6, backgroundColor: '#FF7096' }} />
-                                                </View>
-                                            )}
-                                            {latestProof.status === 'pending' && latestProof.submittedBy === userId && (
-                                                <Text style={{ color: '#888', marginTop: 8, textAlign: 'center' }}>Waiting for buddy to approve...</Text>
-                                            )}
-                                            {latestProof.status === 'approved' && (
-                                                <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Proof approved!</Text>
-                                            )}
-                                            {latestProof.status === 'rejected' && (
-                                                <Text style={{ color: 'red', marginTop: 8, textAlign: 'center' }}>Proof rejected.</Text>
-                                            )}
-                                        </>
-                                    ) : (
-                                        item.members && item.members.length === 1 ? (
-                                            <AppButton title="Invite Buddy" onPress={() => navigation.navigate('HabitDetails', { habit: item, showInvite: true })} />
-                                        ) : (
-                                            <AppButton title="Submit Proof" onPress={() => navigation.navigate('AddHabit', { id: item.id })} />
-                                        )
-                                    )}
+                        if (item.type === 'invite') {
+                            return (
+                                <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, ...theme.shadow, alignItems: 'center', borderColor: theme.accent, borderWidth: 2 }}>
+                                    <Text style={{ fontSize: 18, fontWeight: '600', textAlign: 'center' }}>Invited to join: {item.habitName}</Text>
+                                    <Text style={{ color: '#888', marginBottom: 8 }}>Invited by: {item.invitedBy}</Text>
+                                    <View style={{ flexDirection: 'row', marginTop: 8, justifyContent: 'center', width: '100%' }}>
+                                        <AppButton title="Accept" onPress={async () => {
+                                            console.log('Accept pressed for invite:', item);
+                                            try {
+                                                await useHabitStore.getState().respondToInvite(item.habitId, item.id, 'accepted');
+                                                console.log('respondToInvite completed for:', item.habitId, item.id);
+                                                setInvites(prev => prev.filter(i => i.id !== item.id));
+                                            } catch (e) {
+                                                console.error('Error in respondToInvite:', e);
+                                            }
+                                        }} style={{ flex: 1, marginRight: 6, backgroundColor: theme.primary }} />
+                                        <AppButton title="Reject" onPress={async () => {
+                                            await useHabitStore.getState().respondToInvite(item.habitId, item.id, 'rejected');
+                                            setInvites(prev => prev.filter(i => i.id !== item.id));
+                                        }} style={{ flex: 1, marginLeft: 6, backgroundColor: '#FF7096' }} />
+                                    </View>
                                 </View>
-                            </TouchableOpacity>
-                        );
+                            );
+                        } else {
+                            // ...existing habit rendering code...
+                            const habitProofs = proofs[item.id] || [];
+                            const today = new Date().toDateString();
+                            const todaysProof = habitProofs.find(p => {
+                                if (!p.timestamp) return false;
+                                try {
+                                    const proofDate = p.timestamp.toDate
+                                        ? p.timestamp.toDate()
+                                        : new Date(p.timestamp);
+                                    return proofDate.toDateString() === today;
+                                } catch (e) {
+                                    return false;
+                                }
+                            });
+                            const latestProof = todaysProof || null;
+                            return (
+                                <TouchableOpacity onPress={() => navigation.navigate('HabitDetails', { habit: item })}>
+                                    <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, ...theme.shadow, alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 18, fontWeight: '600', textAlign: 'center' }}>{item.name}</Text>
+                                        {latestProof ? (
+                                            <>
+                                                <Text style={{ textAlign: 'center' }}>Status: {latestProof.status}</Text>
+                                                <Image source={{ uri: latestProof.url }} style={{ width: 120, height: 120, marginVertical: 8, borderRadius: 8, alignSelf: 'center' }} />
+                                                <Text style={{ textAlign: 'center' }}>Submitted by: {latestProof.submittedBy === userId ? 'You' : 'Buddy'}</Text>
+                                                {latestProof.status === 'pending' && userId !== latestProof.submittedBy && (
+                                                    <View style={{ flexDirection: 'row', marginTop: 8, justifyContent: 'center', width: '100%' }}>
+                                                        <AppButton title="Approve" onPress={async () => {
+                                                            await useHabitStore.getState().approveProof(item.id, latestProof.id);
+                                                        }} style={{ flex: 1, marginRight: 6 }} />
+                                                        <AppButton title="Reject" onPress={async () => {
+                                                            await useHabitStore.getState().rejectProof(item.id, latestProof.id);
+                                                        }} style={{ flex: 1, marginLeft: 6, backgroundColor: '#FF7096' }} />
+                                                    </View>
+                                                )}
+                                                {latestProof.status === 'pending' && latestProof.submittedBy === userId && (
+                                                    <Text style={{ color: '#888', marginTop: 8, textAlign: 'center' }}>Waiting for buddy to approve...</Text>
+                                                )}
+                                                {latestProof.status === 'approved' && (
+                                                    <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Proof approved!</Text>
+                                                )}
+                                                {latestProof.status === 'rejected' && (
+                                                    <Text style={{ color: 'red', marginTop: 8, textAlign: 'center' }}>Proof rejected.</Text>
+                                                )}
+                                            </>
+                                        ) : (
+                                            item.members && item.members.length === 1 ? (
+                                                <AppButton title="Invite Buddy" onPress={() => navigation.navigate('HabitDetails', { habit: item, showInvite: true })} />
+                                            ) : (
+                                                // Only show Submit Proof if user has not submitted today
+                                                (() => {
+                                                    const myMember = item.members?.find(m => m.id === userId);
+                                                    if (myMember?.submittedToday) {
+                                                        return <Text style={{ color: '#888', marginTop: 8, textAlign: 'center' }}>You already submitted today.</Text>;
+                                                    }
+                                                    return <AppButton title="Submit Proof" onPress={() => navigation.navigate('AddHabit', { id: item.id })} />;
+                                                })()
+                                            )
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        }
                     }}
                 />
             </View>
