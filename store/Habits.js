@@ -78,15 +78,18 @@ export const useHabitStore = create((set, get) => ({
     const habitSnap = await getDoc(habitRef);
     if (!habitSnap.exists()) throw new Error('Habit not found');
     const habit = habitSnap.data();
+
+    // Validate member exists
+    const memberExists = (habit.members || []).some(m => m.id === memberId);
+    if (!memberExists) throw new Error('Member not found in habit');
+
     let members = (habit.members || []).map(m =>
       m.id === memberId ? { ...m, ...updates } : m
     );
     // Ensure memberIds matches members
     let memberIds = members.map(m => m.id);
     await updateDoc(habitRef, { members, memberIds });
-  },
-
-  // Invite buddy: create a pending invite in invites subcollection
+  },  // Invite buddy: create a pending invite in invites subcollection
   inviteBuddy: async (habitId, inviteeId) => {
     const userId = useUserStore.getState().userId;
     if (!userId) throw new Error('User ID not set');
@@ -152,35 +155,33 @@ export const useHabitStore = create((set, get) => ({
   respondToInvite: async (habitId, inviteId, action) => {
     // action: 'accepted' or 'rejected'
     const userId = useUserStore.getState().userId;
-    console.log('respondToInvite called:', { habitId, inviteId, action, userId });
     if (!userId) throw new Error('User ID not set');
     const inviteRef = doc(db, `habits/${habitId}/invites`, inviteId);
     const inviteSnap = await getDoc(inviteRef);
     if (!inviteSnap.exists()) {
-      console.error('Invite not found:', habitId, inviteId);
       throw new Error('Invite not found');
     }
     const invite = inviteSnap.data();
-    console.log('Invite data:', invite);
+
+    // Validate that current user is the invitee
+    if (invite.invitee !== userId) {
+      throw new Error('You are not authorized to respond to this invite');
+    }
+
     if (invite.status !== 'pending') {
-      console.log('Invite not pending:', invite.status);
       return;
     }
     // Update invite status
     await updateDoc(inviteRef, { status: action });
-    console.log('Invite status updated:', action);
     if (action === 'accepted') {
       // Add member to habit
       const habitRef = doc(db, 'habits', habitId);
       const habitSnap = await getDoc(habitRef);
       if (!habitSnap.exists()) {
-        console.error('Habit not found:', habitId);
         throw new Error('Habit not found');
       }
       const habit = habitSnap.data();
-      console.log('Habit before update:', habit);
       if ((habit.memberIds || []).includes(userId)) {
-        console.log('User already in memberIds:', userId);
         return;
       }
       const newMember = {
@@ -193,10 +194,8 @@ export const useHabitStore = create((set, get) => ({
       const members = [...(habit.members || []), newMember];
       const memberIds = [...(habit.memberIds || []), userId];
       await updateDoc(habitRef, { members, memberIds });
-      console.log('Habit updated with new member:', userId);
     }
   },
-
 
   // Approve proof (buddy action, per member)
   approveProof: async (habitId, proofId) => {
@@ -238,12 +237,24 @@ export const useHabitStore = create((set, get) => ({
 
   // Reject proof (buddy action, per member)
   rejectProof: async (habitId, proofId) => {
+    const userId = useUserStore.getState().userId;
+    if (!userId) throw new Error('User ID not set');
     const proofDoc = doc(db, `habits/${habitId}/proofs`, proofId);
-    await updateDoc(proofDoc, { status: 'rejected' });
-    // Set member's approved to false, reset streak to 0
     const proofSnap = await getDoc(proofDoc);
     const proofData = proofSnap.exists() ? proofSnap.data() : null;
     if (!proofData) return;
+    // Authorization: Only allow if user is a member of the habit and not the submitter
+    const habitRef = doc(db, 'habits', habitId);
+    const habitSnap = await getDoc(habitRef);
+    if (!habitSnap.exists()) throw new Error('Habit not found');
+    const habit = habitSnap.data();
+    const isMember = (habit.members || []).some(m => m.id === userId);
+    const isSubmitter = proofData.submittedBy === userId;
+    if (!isMember || isSubmitter) {
+      throw new Error('You are not authorized to reject this proof');
+    }
+    await updateDoc(proofDoc, { status: 'rejected' });
+    // Set member's approved to false, reset streak to 0
     const memberId = proofData.submittedBy;
     await get().updateMemberField(habitId, memberId, { approved: false, streak: 0 });
   },

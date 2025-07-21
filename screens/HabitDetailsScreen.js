@@ -13,6 +13,12 @@ import * as Haptics from 'expo-haptics';
 import { getPushTokenForUser, sendPushNotification } from '../utils/push';
 
 export default function HabitDetailsScreen({ route, navigation }) {
+    // Helper to get member IDs from habit
+    function getMemberIds(habit) {
+        if (habit.memberIds && Array.isArray(habit.memberIds)) return habit.memberIds;
+        if (habit.members && Array.isArray(habit.members)) return habit.members.map(m => m.id);
+        return [];
+    }
     const { habit } = route.params;
     const userId = useUserStore(s => s.userId);
     const [proofs, setProofs] = useState([]);
@@ -40,7 +46,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
             const q = query(collection(db, 'users'), where('username', '>=', search.trim()), where('username', '<=', search.trim() + '\uf8ff'));
             const snap = await getDocs(q);
             // Only show users not already in memberIds
-            const memberIds = (habit.memberIds || (habit.members || []).map(m => m.id) || []);
+            const memberIds = getMemberIds(habit);
             const results = snap.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(u => u.id !== userId && !memberIds.includes(u.id));
@@ -54,7 +60,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
 
     async function handleInvite(uid) {
         // Only allow max 2 members
-        if ((habit.memberIds || (habit.members || []).map(m => m.id) || []).length >= 2) return;
+        if (getMemberIds(habit).length >= 2) return;
         try {
             await useHabitStore.getState().inviteBuddy(habit.id, uid);
             setInviteModal(false);
@@ -131,7 +137,7 @@ export default function HabitDetailsScreen({ route, navigation }) {
                 <Text>Best Streak: {myBestStreak}</Text>
                 <Text>Buddy ID(s): {buddyIds.length ? buddyIds.join(', ') : 'None'}</Text>
                 {/* Invite Buddy Button if only 1 member */}
-                {(habit.memberIds ? habit.memberIds.length : (habit.members || []).length) === 1 && (
+                {getMemberIds(habit).length === 1 && (
                     <AppButton title="Invite Buddy" onPress={() => setInviteModal(true)} style={{ marginVertical: 12 }} />
                 )}
                 {/* Invite Modal */}

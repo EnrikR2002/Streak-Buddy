@@ -200,7 +200,10 @@ export default function HomeScreen({ navigation }) {
                                                     <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Proof approved! Current Streak: {myMember?.streak ?? 0}</Text>
                                                 )}
                                                 {latestProof.status === 'approved' && latestProof.submittedBy !== userId && (
-                                                    <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Buddy's proof approved!</Text>
+                                                    // If user hasn't submitted their own proof today, show Submit Proof button
+                                                    myMember?.submittedToday
+                                                        ? (<Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Buddy's proof approved!</Text>)
+                                                        : (<AppButton title="Submit Proof" onPress={() => navigation.navigate('AddHabit', { id: item.id })} />)
                                                 )}
                                                 {latestProof.status === 'rejected' && (
                                                     <Text style={{ color: 'red', marginTop: 8, textAlign: 'center' }}>Proof rejected.</Text>
