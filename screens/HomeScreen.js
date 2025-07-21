@@ -46,8 +46,25 @@ export default function HomeScreen({ navigation }) {
             collection(db, 'habits'),
             where('memberIds', 'array-contains', userId)
         );
+        // Store proof unsubscribers so we can clean them up
+        let proofUnsubs = [];
+
         const unsub1 = onSnapshot(q1, snap => {
-            setHabits(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const loadedHabits = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setHabits(loadedHabits);
+
+            // Clean up previous proof listeners
+            proofUnsubs.forEach(u => u && u());
+            proofUnsubs = [];
+
+            // Set up proof listeners for current habits
+            loadedHabits.forEach(habit => {
+                const q = query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc'));
+                const unsub = onSnapshot(q, snap => {
+                    setProofs(prev => ({ ...prev, [habit.id]: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+                });
+                proofUnsubs.push(unsub);
+            });
         });
 
         // Fetch invites where I'm the invitee (pending only)
@@ -71,19 +88,10 @@ export default function HomeScreen({ navigation }) {
             );
         });
 
-        // Listen for proofs for all habits
-        const unsubProofs = [];
-        habits.forEach(habit => {
-            const q = query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc'));
-            unsubProofs.push(onSnapshot(q, snap => {
-                setProofs(prev => ({ ...prev, [habit.id]: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
-            }));
-        });
-
         return () => {
             unsub1();
             unsub2();
-            unsubProofs.forEach(u => u && u());
+            proofUnsubs.forEach(u => u && u());
         };
     }, [userId]);
 
@@ -126,6 +134,7 @@ export default function HomeScreen({ navigation }) {
                     ListEmptyComponent={<Text>No habits or invites yet. Add one!</Text>}
                     renderItem={({ item }) => {
                         if (item.type === 'invite') {
+                            // ...existing code for invites...
                             return (
                                 <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, ...theme.shadow, alignItems: 'center', borderColor: theme.accent, borderWidth: 2 }}>
                                     <Text style={{ fontSize: 18, fontWeight: '600', textAlign: 'center' }}>Invited to join: {item.habitName}</Text>
@@ -164,6 +173,7 @@ export default function HomeScreen({ navigation }) {
                                 }
                             });
                             const latestProof = todaysProof || null;
+                            const myMember = item.members?.find(m => m.id === userId);
                             return (
                                 <TouchableOpacity onPress={() => navigation.navigate('HabitDetails', { habit: item })}>
                                     <View style={{ backgroundColor: theme.card, borderRadius: theme.borderRadius, padding: 16, marginVertical: 10, ...theme.shadow, alignItems: 'center' }}>
@@ -186,8 +196,11 @@ export default function HomeScreen({ navigation }) {
                                                 {latestProof.status === 'pending' && latestProof.submittedBy === userId && (
                                                     <Text style={{ color: '#888', marginTop: 8, textAlign: 'center' }}>Waiting for buddy to approve...</Text>
                                                 )}
-                                                {latestProof.status === 'approved' && (
-                                                    <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Proof approved!</Text>
+                                                {latestProof.status === 'approved' && latestProof.submittedBy === userId && (
+                                                    <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Proof approved! Current Streak: {myMember?.streak ?? 0}</Text>
+                                                )}
+                                                {latestProof.status === 'approved' && latestProof.submittedBy !== userId && (
+                                                    <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Buddy's proof approved!</Text>
                                                 )}
                                                 {latestProof.status === 'rejected' && (
                                                     <Text style={{ color: 'red', marginTop: 8, textAlign: 'center' }}>Proof rejected.</Text>
@@ -199,8 +212,13 @@ export default function HomeScreen({ navigation }) {
                                             ) : (
                                                 // Only show Submit Proof if user has not submitted today
                                                 (() => {
-                                                    const myMember = item.members?.find(m => m.id === userId);
                                                     if (myMember?.submittedToday) {
+                                                        // Show approved/rejected status if available
+                                                        if (myMember?.approved === true) {
+                                                            return <Text style={{ color: 'green', marginTop: 8, textAlign: 'center' }}>Proof approved! Current Streak: {myMember?.streak ?? 0}</Text>;
+                                                        } else if (myMember?.approved === false) {
+                                                            return <Text style={{ color: 'red', marginTop: 8, textAlign: 'center' }}>Proof rejected.</Text>;
+                                                        }
                                                         return <Text style={{ color: '#888', marginTop: 8, textAlign: 'center' }}>You already submitted today.</Text>;
                                                     }
                                                     return <AppButton title="Submit Proof" onPress={() => navigation.navigate('AddHabit', { id: item.id })} />;
