@@ -33,7 +33,9 @@ export default function HomeScreen({ navigation }) {
                         const data = snap.data();
                         setProfilePic(data.profilePic);
                     }
-                } catch { }
+                } catch (e) {
+                    console.error('[HomeScreen] Error fetching profilePic:', e);
+                }
             }
             fetchProfilePic();
             return () => { isActive = false; };
@@ -49,23 +51,35 @@ export default function HomeScreen({ navigation }) {
         // Store proof unsubscribers so we can clean them up
         let proofUnsubs = [];
 
-        const unsub1 = onSnapshot(q1, snap => {
-            const loadedHabits = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setHabits(loadedHabits);
+        const unsub1 = onSnapshot(
+            q1,
+            snap => {
+                const loadedHabits = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setHabits(loadedHabits);
 
-            // Clean up previous proof listeners
-            proofUnsubs.forEach(u => u && u());
-            proofUnsubs = [];
+                // Clean up previous proof listeners
+                proofUnsubs.forEach(u => u && u());
+                proofUnsubs = [];
 
-            // Set up proof listeners for current habits
-            loadedHabits.forEach(habit => {
-                const q = query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc'));
-                const unsub = onSnapshot(q, snap => {
-                    setProofs(prev => ({ ...prev, [habit.id]: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+                // Set up proof listeners for current habits
+                loadedHabits.forEach(habit => {
+                    const q = query(collection(db, `habits/${habit.id}/proofs`), orderBy('timestamp', 'desc'));
+                    const unsub = onSnapshot(
+                        q,
+                        snap => {
+                            setProofs(prev => ({ ...prev, [habit.id]: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+                        },
+                        error => {
+                            console.error(`[HomeScreen] Error in proofs listener for habitId ${habit.id}:`, error);
+                        }
+                    );
+                    proofUnsubs.push(unsub);
                 });
-                proofUnsubs.push(unsub);
-            });
-        });
+            },
+            error => {
+                console.error('[HomeScreen] Error in habits listener:', error);
+            }
+        );
 
         // Fetch invites where I'm the invitee (pending only)
         const q2 = query(
@@ -73,20 +87,26 @@ export default function HomeScreen({ navigation }) {
             where('invitee', '==', userId),
             where('status', '==', 'pending')
         );
-        const unsub2 = onSnapshot(q2, snap => {
-            setInvites(
-                snap.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        habitId: doc.ref.parent.parent.id,
-                        habitName: data.habitName || '',
-                        invitedBy: data.invitedBy || '',
-                        ...data
-                    };
-                })
-            );
-        });
+        const unsub2 = onSnapshot(
+            q2,
+            snap => {
+                setInvites(
+                    snap.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            habitId: doc.ref.parent.parent.id,
+                            habitName: data.habitName || '',
+                            invitedBy: data.invitedBy || '',
+                            ...data
+                        };
+                    })
+                );
+            },
+            error => {
+                console.error('[HomeScreen] Error in invites listener:', error);
+            }
+        );
 
         return () => {
             unsub1();
